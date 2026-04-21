@@ -24038,18 +24038,29 @@ function openExportSheet(title,text,csv,html,callbacks){
    etc. instead of stuck in a browser-style print popup. Desktop and older
    webviews fall back to a standard blob download. */
 function _nativeShareFile(blob,filename,mimeType,shareTitle){
-  try{
-    var file=new File([blob],filename,{type:mimeType});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      return navigator.share({files:[file],title:shareTitle||filename}).catch(function(){});
-    }
-  }catch(e){}
-  /* Fallback: download via invisible anchor */
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');
-  a.href=url;a.download=filename;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  setTimeout(function(){URL.revokeObjectURL(url);},1500);
+  function _dl(){
+    var url=URL.createObjectURL(blob);
+    var a=document.createElement('a');
+    a.href=url;a.download=filename;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(function(){URL.revokeObjectURL(url);},1500);
+  }
+  if(navigator.share){
+    try{
+      var file=new File([blob],filename,{type:mimeType});
+      var payload={files:[file],title:shareTitle||filename};
+      // iOS Safari's canShare({files}) has known false-negatives for PDFs —
+      // attempt the share whenever navigator.share exists, and only fall
+      // through to download on actual throw or async rejection. This
+      // restores the native share sheet on iOS/Android where previously
+      // the canShare gate was silently bailing into a bare download.
+      if(!navigator.canShare || navigator.canShare(payload)){
+        return navigator.share(payload).catch(function(){ _dl(); });
+      }
+      return navigator.share(payload).catch(function(){ _dl(); });
+    }catch(_){ /* fall through to download */ }
+  }
+  _dl();
   return Promise.resolve();
 }
 function _htmlBlob(html){return new Blob([html],{type:'text/html;charset=utf-8'});}
@@ -26172,9 +26183,32 @@ function jcResultsReady(tab,tabName,svgHtml,divId,breakdownId){
   if(existing)existing.parentNode.removeChild(existing);
   var act=document.createElement('div');
   act.className='result-actions';
-  act.innerHTML='<button class="result-save-btn" onclick="jcShowSave()">Save to Notes</button><button class="result-export-btn" onclick="jcExport()">Share &amp; Export</button><button class="result-export-btn" onclick="calcHistShow(\''+tab+'\')" style="flex:0 0 auto;padding:8px 12px;" title="View recent calculations">&#x1F4CB;</button>';
+  function _jcQ(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/'/g,'&#39;').replace(/"/g,'&quot;');}
+  var _tb=_jcQ(tab),_tn=_jcQ(tabName),_dv=_jcQ(divId||''),_bk=_jcQ(breakdownId||'');
+  act.innerHTML='<button class="result-save-btn" onclick="jcShowSaveFor(\''+_tb+'\',\''+_tn+'\',\''+_dv+'\',\''+_bk+'\')">Save to Notes</button><button class="result-export-btn" onclick="jcExportFor(\''+_tb+'\',\''+_tn+'\',\''+_dv+'\',\''+_bk+'\')">Share &amp; Export</button><button class="result-export-btn" onclick="calcHistShow(\''+_tb+'\')" style="flex:0 0 auto;padding:8px 12px;" title="View recent calculations">&#x1F4CB;</button>';
   resEl.appendChild(act);
 }
+function _jcSyncFromDom(tab,tabName,divId,breakdownId){
+  var svgKeep=null,printKeep=null,panelKeep=null;
+  if(_jcPending&&_jcPending.tab===tab){
+    svgKeep=_jcPending.svg||null;
+    printKeep=_jcPending.printHtml||null;
+    panelKeep=_jcPending.panelInfo||null;
+  }
+  jcResultsReady(tab,tabName,svgKeep,divId||null,breakdownId||null);
+  if(_jcPending){
+    if(printKeep&&!_jcPending.printHtml)_jcPending.printHtml=printKeep;
+    if(panelKeep&&!_jcPending.panelInfo)_jcPending.panelInfo=panelKeep;
+  }
+}
+window.jcExportFor=function(tab,tabName,divId,breakdownId){
+  _jcSyncFromDom(tab,tabName,divId,breakdownId);
+  jcExport();
+};
+window.jcShowSaveFor=function(tab,tabName,divId,breakdownId){
+  _jcSyncFromDom(tab,tabName,divId,breakdownId);
+  jcShowSave();
+};
 
 function initTabScroll(){
   var bar=document.querySelector('.tab-bar');
@@ -39213,13 +39247,28 @@ function lblCustomSyncCount(){
   var footEl=document.getElementById('lbl-custom-footer-count');
   if(footEl) footEl.textContent=n+' item'+(n===1?'':'s')+' \u00b7 '+total+' label'+(total===1?'':'s');
 }
+function _lblCustomScrubStuckFs(m){
+  if(!m) return;
+  try{m.querySelectorAll('input,textarea').forEach(function(el){
+    if(el.hasAttribute('data-ios-fs-prev')){el.style.removeProperty('font-size');el.removeAttribute('data-ios-fs-prev');}
+    else if(el.style && el.style.fontSize==='16px'){el.style.removeProperty('font-size');}
+  });}catch(_){}
+}
+function _lblCustomBlurInside(m){
+  try{var foc=document.activeElement;if(foc&&m&&m.contains(foc)&&foc.blur)foc.blur();}catch(_){}
+}
 window.lblCustomOpenModal=function(){
+  var m=document.getElementById('lbl-custom-modal');
+  _lblCustomScrubStuckFs(m);
   lblCustomRenderList();
   lblCustomSyncCount();
-  document.getElementById('lbl-custom-modal').style.display='flex';
+  m.style.display='flex';
 };
 window.lblCustomCloseModal=function(){
-  document.getElementById('lbl-custom-modal').style.display='none';
+  var m=document.getElementById('lbl-custom-modal');
+  _lblCustomBlurInside(m);
+  _lblCustomScrubStuckFs(m);
+  m.style.display='none';
   lblCustomClosePaste();
   lblCustomClosePresets();
   lblUpdate();
@@ -39302,12 +39351,17 @@ window.lblCustomEdit=function(idx){
   var it=_lblCustomItems[idx];
   if(!it) return;
   _lblCustomEditIdx=idx;
+  var m=document.getElementById('lbl-custom-edit-modal');
+  _lblCustomScrubStuckFs(m);
   document.getElementById('lbl-custom-edit-text').value=it.text||'';
   document.getElementById('lbl-custom-edit-copies').value=String(parseInt(it.copies)||1);
-  document.getElementById('lbl-custom-edit-modal').style.display='flex';
+  m.style.display='flex';
 };
 window.lblCustomEditCancel=function(){
-  document.getElementById('lbl-custom-edit-modal').style.display='none';
+  var m=document.getElementById('lbl-custom-edit-modal');
+  _lblCustomBlurInside(m);
+  _lblCustomScrubStuckFs(m);
+  m.style.display='none';
   _lblCustomEditIdx=-1;
 };
 window.lblCustomEditSave=function(){
@@ -39316,7 +39370,10 @@ window.lblCustomEditSave=function(){
   if(!it){_lblCustomEditIdx=-1;return;}
   it.text=(document.getElementById('lbl-custom-edit-text').value||'').trim();
   it.copies=Math.max(1,Math.min(100,parseInt(document.getElementById('lbl-custom-edit-copies').value)||1));
-  document.getElementById('lbl-custom-edit-modal').style.display='none';
+  var m=document.getElementById('lbl-custom-edit-modal');
+  _lblCustomBlurInside(m);
+  _lblCustomScrubStuckFs(m);
+  m.style.display='none';
   _lblCustomEditIdx=-1;
   lblCustomRenderList();
   lblCustomSyncCount();
