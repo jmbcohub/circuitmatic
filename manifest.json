@@ -1,0 +1,20 @@
+{
+  "name": "Circuitmatic",
+  "short_name": "Circuitmatic",
+  "description": "Electrician's calculator — voltage drop, ampacity, box fill, motor circuits & more",
+  "id": "/",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#13161f",
+  "theme_color": "#343947",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    { "src": "icon_32.png", "sizes": "32x32", "type": "image/png", "purpose": "any" },
+    { "src": "icon_180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "icon_192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icon_1024.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}
