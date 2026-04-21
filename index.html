@@ -3132,6 +3132,7 @@ body.light-mode .stg-state-grp-hd.yrlocal span,body.light-mode .stg-state-badge.
 .stg-overlay{position:fixed;inset:0;background:var(--bg);z-index:970;overflow-y:auto;display:none;-webkit-overflow-scrolling:touch;}
 .stg-overlay.open{display:block;}
 body.stg-open,body.co-open,body.legal-open{overflow:hidden;touch-action:none;}
+body.tour-open{overflow:hidden;}
 body.stg-open .bottom-nav,body.co-open .bottom-nav,body.legal-open .bottom-nav{visibility:hidden;}
 .stg-overlay-head{display:flex;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top) + 14px) 16px 14px;background:var(--card);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1;}
 .stg-overlay-title{font-family:'Orbitron',sans-serif;font-size:15px;color:#5BC5F2;letter-spacing:.04em;}
@@ -3460,7 +3461,7 @@ input.fi:focus-visible, select.fi:focus-visible { outline: none; } /* already ha
     /* Skip overlays that manage their own scroll-lock via body classes —
        the heavy position:fixed body lock disturbs iOS Safari's visual viewport
        and leaves the bottom-nav misaligned after close. */
-    if(id==='stg-overlay' || id==='co-modal-ov' || id==='tou-ov' || id==='disc-ov' || id==='pp-ov') return false;
+    if(id==='stg-overlay' || id==='co-modal-ov' || id==='tou-ov' || id==='disc-ov' || id==='pp-ov' || id==='tour-ov') return false;
     if(id && /(-ov|-overlay|-modal|-sheet|-lightbox|-lb)$/.test(id)) return true;
     if(id && (id==='photo-lightbox' || id==='svg-lb' || id==='wm-offset-modal' || id==='lbl-custom-modal' || id==='lbl-custom-edit-modal' || id==='dga-ov')) return true;
     var c = el.className;
@@ -20707,6 +20708,7 @@ function tourStart(){
   _tourIdx=0;
   var ov=document.getElementById('tour-ov');
   if(ov)ov.classList.add('open');
+  document.body.classList.add('tour-open');
   /* Escape dismisses the tour like the Skip button — standard dialog
      contract. Handler is registered once per session and torn down on
      finish so we don't leave listeners dangling. */
@@ -20740,6 +20742,7 @@ function tourFinish(markSeen){
   }
   var ov=document.getElementById('tour-ov');
   if(ov)ov.classList.remove('open','tappable');
+  document.body.classList.remove('tour-open');
   try{if(typeof closeMenu==='function')closeMenu();}catch(_){}
   if(markSeen)tutorialMarkSeen();
 }
