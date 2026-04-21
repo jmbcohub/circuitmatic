@@ -140,8 +140,9 @@ body.light-mode .tab-btn.active { color: var(--brand-navy); background: #ffffff;
 .cht-hd-txt{flex:1;}.cht-title{font-size:var(--fs-lg);font-weight:700;color:var(--text);}.cht-sub{font-size:var(--fs-base);color:var(--sub);}
 .cht-chev{font-size:var(--fs-base);color:var(--sub);flex-shrink:0;transition:transform .2s;}
 .cht-body{display:none;border-top:1px solid var(--border);padding:0 0 8px;}
-.cht-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-left:12px;padding-right:12px;-webkit-mask-image:linear-gradient(to right,#000 85%,transparent 100%);mask-image:linear-gradient(to right,#000 85%,transparent 100%);}
-.cht-scroll.scrolled{-webkit-mask-image:none;mask-image:none;}
+.cht-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-left:12px;padding-right:12px;}
+.cht-scroll.can-scroll{-webkit-mask-image:linear-gradient(to right,#000 85%,transparent 100%);mask-image:linear-gradient(to right,#000 85%,transparent 100%);}
+.cht-scroll.can-scroll.scrolled{-webkit-mask-image:none;mask-image:none;}
 .cht-tbl{border-collapse:collapse;width:100%;font-family:var(--font-mono);font-size:var(--fs-base);border:1px solid var(--border);}
 .cht-tbl th{background:var(--surface);color:var(--text);font-size:var(--fs-xs);font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:5px 5px;text-align:right;border-bottom:1px solid var(--border);white-space:normal;line-height:1.2;position:sticky;top:0;z-index:1;}
 .cht-tbl th:first-child{text-align:left;}
@@ -428,6 +429,21 @@ body.light-mode .svc-method-btn.active,body.light-mode .svc-method-btn:hover{bor
 .svc-ib:hover{color:var(--text);}
 #tab-charts .svc-ib{color:var(--text-heading);}
 #tab-charts .svc-ib:hover{color:var(--brand-navy);}
+#tab-uc .uc-swap-btn,#tab-uc .uc-swap-spacer{flex:0 0 40px;}
+#tab-uc .uc-swap-btn{align-self:stretch;background:none;border:1px solid var(--border);border-radius:8px;font-size:var(--fs-xl);color:#5BC5F2;cursor:pointer;-webkit-tap-highlight-color:transparent;padding:0;display:flex;align-items:center;justify-content:center;box-sizing:border-box;}
+#tab-uc .uc-ctrl{flex:1;min-width:0;}
+#tab-uc .uc-ctrl>.fi{width:100%;box-sizing:border-box;}
+#tab-uc .uc-result{margin:8px 14px;padding:16px;border-radius:14px;background:var(--card);border:1px solid var(--border);box-shadow:0 1px 3px rgba(0,0,0,.04);}
+#tab-uc .uc-from{font-family:var(--font-mono);font-size:var(--fs-md);color:var(--sub);letter-spacing:.02em;}
+#tab-uc .uc-to{display:flex;align-items:baseline;gap:10px;margin-top:6px;flex-wrap:wrap;}
+#tab-uc .uc-to-arrow{font-size:var(--fs-xl);color:var(--brand-steel);flex-shrink:0;line-height:1;}
+#tab-uc .uc-to-val{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text);line-height:1.15;}
+#tab-uc .uc-to-unit{font-size:var(--fs-lg);font-weight:600;color:var(--brand-steel);margin-left:2px;}
+#tab-uc .uc-detail{margin-top:12px;padding-top:10px;border-top:1px solid var(--border);display:grid;grid-template-columns:max-content 1fr;gap:6px 16px;font-family:var(--font-mono);font-size:var(--fs-md);}
+#tab-uc .uc-detail dt{color:var(--sub);font-weight:500;}
+#tab-uc .uc-detail dd{color:var(--text);margin:0;text-align:right;font-weight:600;}
+#tab-uc .uc-note{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:var(--fs-sm);color:var(--sub);font-style:italic;line-height:1.4;}
+#tab-uc .uc-error{font-family:var(--font-mono);font-size:var(--fs-md);color:var(--red,#dc2626);font-weight:600;}
 .svc-info-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:800;}
 .svc-info-overlay.open{display:flex;align-items:center;justify-content:center;}
 .svc-info-modal{background:var(--card,#1e2a3a);border-radius:14px;padding:22px;width:calc(100% - 40px);max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.35);max-height:calc(100dvh - 80px);display:flex;flex-direction:column;overflow:hidden;}
@@ -6219,7 +6235,8 @@ if('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations){
   <div class="fields">
     <div class="field-row">
       <div class="field-label">Conversion Type</div>
-      <div class="sel-wrap"><select class="fi" id="uc-type" onchange="ucTypeChange()">
+      <button class="uc-swap-btn" onclick="ucSwap()" title="Swap direction">⇄</button>
+      <div class="sel-wrap uc-ctrl"><select class="fi" id="uc-type" onchange="ucTypeChange()">
         <option value="awg_mm">AWG → mm²</option>
         <option value="mm_awg">mm² → AWG</option>
         <option value="c_f">°C → °F</option>
@@ -6239,19 +6256,19 @@ if('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations){
         <option value="cuyd_cuft">cu yd → cu ft</option>
         <option value="cuft_cuyd">cu ft → cu yd</option>
       </select></div>
-      <button style="background:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:var(--fs-xl);color:#5BC5F2;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;" onclick="ucSwap()" title="Swap direction">⇄</button>
     </div>
     <div class="field-row">
       <div class="field-label" id="uc-input-label">Value</div>
-      <div><input class="fi" type="text" id="uc-input" inputmode="decimal" value="" placeholder="Enter value" oninput="calculateUC()"></div>
+      <div class="uc-swap-spacer" aria-hidden="true"></div>
+      <div class="uc-ctrl"><input class="fi" type="text" id="uc-input" inputmode="decimal" value="" placeholder="Enter value" oninput="calculateUC()"></div>
     </div>
   </div>
-  <div class="result-card" id="uc-result" style="display:none;">
-    <div class="result-grid" id="uc-result-grid"></div>
+  <div class="uc-result" id="uc-result" style="display:none;">
+    <div id="uc-result-body"></div>
   </div>
-  <div style="padding:16px;">
+  <div id="uc-awg-ref" style="padding:16px;">
     <div class="section-label" style="margin-bottom:8px;">AWG Quick Reference</div>
-    <div style="overflow-x:auto;">
+    <div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;">
       <table style="width:100%;border-collapse:collapse;font-size:var(--fs-md);font-family:var(--font-mono);">
         <thead><tr style="background:var(--surface2);color:var(--sub);"><th style="padding:6px 8px;text-align:left;">AWG</th><th style="padding:6px 8px;text-align:right;">mm²</th><th style="padding:6px 8px;text-align:right;">kcmil</th></tr></thead>
         <tbody id="uc-awg-table"></tbody>
@@ -21749,7 +21766,9 @@ function toggleCheckAll(noteId){
     if(el)el.classList.add('expanded');
   },30);
 }
-function toggleCht(id){var el=document.getElementById(id);var chev=document.getElementById(id+'-chev');var open=el.style.display==='block';el.style.display=open?'none':'block';if(chev)chev.style.transform=open?'':'rotate(90deg)';}
+function _chtRecalcScroll(root){var scope=root||document.getElementById('tab-charts');if(!scope)return;var nodes=scope.querySelectorAll('.cht-scroll');for(var i=0;i<nodes.length;i++){var n=nodes[i];if(!n.clientWidth)continue;n.classList.toggle('can-scroll',n.scrollWidth-n.clientWidth>1);}}
+window.addEventListener('resize',function(){_chtRecalcScroll();});
+function toggleCht(id){var el=document.getElementById(id);var chev=document.getElementById(id+'-chev');var open=el.style.display==='block';el.style.display=open?'none':'block';if(chev)chev.style.transform=open?'':'rotate(90deg)';if(!open)_chtRecalcScroll(el);}
 var _chtSearchPrevOpen=null;
 // Keyword tags per chart — terms electricians would search that don't appear in the
 // title/sub. Applied as data-cht-kw on init so the filter can match them.
@@ -43132,20 +43151,23 @@ function scanGeneratePDF(){
     var tb = document.getElementById('uc-awg-table');
     if(!tb) return;
     var html = '';
-    AWG_MM2.forEach(function(r){
-      html += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:5px 8px;color:var(--text);">'+r.awg+'</td><td style="padding:5px 8px;text-align:right;color:var(--text);">'+r.mm2.toFixed(2)+'</td><td style="padding:5px 8px;text-align:right;color:var(--sub);">'+r.kcmil+'</td></tr>';
+    AWG_MM2.forEach(function(r,i){
+      var isLast = i===AWG_MM2.length-1;
+      html += '<tr'+(isLast?'':' style="border-bottom:1px solid var(--border);"')+'><td style="padding:5px 8px;color:var(--text);">'+r.awg+'</td><td style="padding:5px 8px;text-align:right;color:var(--text);">'+r.mm2.toFixed(2)+'</td><td style="padding:5px 8px;text-align:right;color:var(--sub);">'+r.kcmil+'</td></tr>';
     });
     tb.innerHTML = html;
   }
   function ucClearResult(){
     var card = document.getElementById('uc-result');
-    var grid = document.getElementById('uc-result-grid');
-    if(grid) grid.innerHTML = '';
+    var body = document.getElementById('uc-result-body');
+    if(body) body.innerHTML = '';
     if(card) card.style.display = 'none';
   }
   function ucIsAwgText(raw){
     return /[a-z/]/i.test(raw);
   }
+
+  var UC_CONDUCTOR_TYPES = {awg_mm:1, mm_awg:1, kcmil_mm:1, mm_kcmil:1, cmil_mm:1, mm_cmil:1};
 
   window.ucTypeChange = function(){
     var type = document.getElementById('uc-type').value;
@@ -43171,6 +43193,8 @@ function scanGeneratePDF(){
       inp.inputMode = 'decimal';
       inp.placeholder = 'Enter value';
     }
+    var awgRef = document.getElementById('uc-awg-ref');
+    if(awgRef) awgRef.style.display = UC_CONDUCTOR_TYPES[type] ? '' : 'none';
     if(inp && inp.value.trim()){
       var raw = inp.value.trim();
       if(type!=='awg_mm' && ucIsAwgText(raw)){
@@ -43189,54 +43213,50 @@ function scanGeneratePDF(){
     if(pairs[v]){sel.value=pairs[v];ucTypeChange();}
   };
 
+  function ucTrim(s){ if(s.indexOf('.')<0) return s; return s.replace(/0+$/,'').replace(/\.$/,''); }
+
+  function ucHero(fromText, toVal, toUnit){
+    var toInner = toUnit ? toVal+' <span class="uc-to-unit">'+toUnit+'</span>' : toVal;
+    return '<div class="uc-from">'+fromText+'</div>'+
+      '<div class="uc-to"><span class="uc-to-arrow">→</span>'+
+      '<span class="uc-to-val">'+toInner+'</span></div>';
+  }
+
   window.calculateUC = function(){
     var type = document.getElementById('uc-type').value;
     var raw = document.getElementById('uc-input').value.trim();
-    var grid = document.getElementById('uc-result-grid');
+    var body = document.getElementById('uc-result-body');
     var card = document.getElementById('uc-result');
 
     if(!raw){ card.style.display='none'; return; }
 
-    var result = '', label = '', fromLabel = '', toLabel = '';
-
     if(type==='awg_mm'){
       var match = AWG_MM2.filter(function(r){ return r.awg===raw || r.awg===raw.toUpperCase(); })[0];
-      if(!match){ grid.innerHTML='<div class="result-row"><span class="result-label" style="color:var(--red);">AWG size not found</span></div>'; card.style.display=''; return; }
-      grid.innerHTML =
-        '<div class="result-row"><span class="result-label">AWG</span><span class="result-value">'+match.awg+'</span></div>'+
-        '<div class="result-row result-highlight"><span class="result-label">mm²</span><span class="result-value">'+match.mm2.toFixed(2)+'</span></div>'+
-        '<div class="result-row"><span class="result-label">kcmil</span><span class="result-value">'+match.kcmil+'</span></div>';
+      if(!match){ body.innerHTML='<div class="uc-error">AWG size "'+raw+'" not found</div>'; card.style.display=''; return; }
+      body.innerHTML = ucHero(match.awg+' AWG', match.mm2.toFixed(2), 'mm²')+
+        '<dl class="uc-detail"><dt>kcmil</dt><dd>'+match.kcmil+'</dd></dl>';
       card.style.display=''; return;
     }
 
     if(type==='mm_awg'){
       var val = parseFloat(raw); if(isNaN(val)){ card.style.display='none'; return; }
-      // Find closest AWG
       var closest = AWG_MM2[0], minDiff = 9999;
       AWG_MM2.forEach(function(r){ var d=Math.abs(r.mm2-val); if(d<minDiff){minDiff=d;closest=r;} });
-      var minMm = AWG_MM2[0].mm2;
-      var maxMm = AWG_MM2[AWG_MM2.length-1].mm2;
+      var minMm = AWG_MM2[0].mm2, maxMm = AWG_MM2[AWG_MM2.length-1].mm2;
       var note = '';
-      if(val < minMm){
-        note = 'Below table range — showing smallest listed AWG reference.';
-      } else if(val > maxMm){
-        note = 'Above table range — showing largest listed AWG reference.';
-      } else if(minDiff > 0.05){
-        note = 'Nearest listed AWG reference — not an exact table match.';
-      }
-      grid.innerHTML =
-        '<div class="result-row"><span class="result-label">Input</span><span class="result-value">'+val+' mm²</span></div>'+
-        '<div class="result-row result-highlight"><span class="result-label">Closest AWG</span><span class="result-value">'+closest.awg+'</span></div>'+
-        '<div class="result-row"><span class="result-label">Actual mm²</span><span class="result-value">'+closest.mm2.toFixed(2)+'</span></div>'+
-        (note?'<div class="result-row"><span class="result-label">Note</span><span class="result-value" style="font-size:var(--fs-sm);color:var(--sub);font-weight:600;">'+note+'</span></div>':'');
+      if(val < minMm) note = 'Below table range — showing smallest listed AWG.';
+      else if(val > maxMm) note = 'Above table range — showing largest listed AWG.';
+      else if(minDiff > 0.05) note = 'Nearest listed AWG — not an exact table match.';
+      body.innerHTML = ucHero(val+' mm²', '≈ '+closest.awg, 'AWG')+
+        '<dl class="uc-detail"><dt>Actual mm²</dt><dd>'+closest.mm2.toFixed(2)+'</dd><dt>kcmil</dt><dd>'+closest.kcmil+'</dd></dl>'+
+        (note?'<div class="uc-note">'+note+'</div>':'');
       card.style.display=''; return;
     }
 
     var val = parseFloat(raw);
     if(isNaN(val)){
-      grid.innerHTML='<div class="result-row"><span class="result-label" style="color:var(--red,#dc2626);">Invalid number</span><span class="result-value" style="color:var(--sub);">Enter a numeric value</span></div>';
-      card.style.display='';
-      return;
+      body.innerHTML='<div class="uc-error">Enter a valid number</div>';
+      card.style.display=''; return;
     }
 
     var conversions = {
@@ -43262,9 +43282,7 @@ function scanGeneratePDF(){
     if(!c){ card.style.display='none'; return; }
     var out = c.fn(val);
     var decimals = (type==='c_f'||type==='f_c') ? 1 : (type==='w_hp'||type==='hp_w') ? 3 : 4;
-    grid.innerHTML =
-      '<div class="result-row"><span class="result-label">'+c.from+'</span><span class="result-value">'+val+'</span></div>'+
-      '<div class="result-row result-highlight"><span class="result-label">'+c.to+'</span><span class="result-value">'+out.toFixed(decimals)+'</span></div>';
+    body.innerHTML = ucHero(val+' '+c.from, ucTrim(out.toFixed(decimals)), c.to);
     card.style.display='';
   };
 
