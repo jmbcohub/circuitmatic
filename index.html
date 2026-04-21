@@ -183,7 +183,7 @@ body.light-mode .tab-btn.active { color: var(--neutral-800); background: #ffffff
 .cht-chev{font-size:var(--fs-base);color:var(--sub);flex-shrink:0;transition:transform .2s;}
 .cht-body{display:none;border-top:1px solid var(--border);padding:0 0 8px;}
 .cht-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-left:12px;padding-right:12px;}
-.cht-scroll.can-scroll{-webkit-mask-image:linear-gradient(to right,#000 85%,transparent 100%);mask-image:linear-gradient(to right,#000 85%,transparent 100%);}
+.cht-scroll.can-scroll{-webkit-mask-image:linear-gradient(to right,#000 95%,transparent 100%);mask-image:linear-gradient(to right,#000 95%,transparent 100%);}
 .cht-scroll.can-scroll.scrolled{-webkit-mask-image:none;mask-image:none;}
 .cht-tbl{border-collapse:collapse;width:100%;font-family:var(--font-mono);font-size:var(--fs-base);border:1px solid var(--border);}
 .cht-tbl th{background:var(--surface);color:var(--text);font-size:var(--fs-xs);font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:5px 5px;text-align:right;border-bottom:1px solid var(--border);white-space:normal;line-height:1.2;position:sticky;top:0;z-index:1;}
@@ -2847,7 +2847,7 @@ body.light-mode .ts-header-row{background:#fff;border-color:#e2e8f0;}
 .ts-wkstart-sel{background:transparent;border:1px solid var(--border);border-radius:7px;padding:0 8px;font-size:12px;font-weight:600;font-family:'Inter',sans-serif;color:var(--text);cursor:pointer;outline:none;height:32px;box-sizing:border-box;}
 
 /* ── Settings Tab ── */
-.stg-inner{padding:16px 14px calc(60px + env(safe-area-inset-bottom));background:var(--bg,#f3f4f6);min-height:100%;}
+.stg-inner{padding:16px 14px calc(60px + env(safe-area-inset-bottom));background:var(--bg,#f3f4f6);}
 .stg-group{margin-bottom:20px;}
 .stg-group-lbl{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--sub,#6b7280);font-family:var(--font-mono);padding:0 4px 6px;}
 .stg-card{background:var(--card,#fff);border-radius:12px;border:1px solid var(--border,#e5e7eb);margin-bottom:8px;overflow:hidden;}
@@ -3556,7 +3556,7 @@ input.fi:focus-visible, select.fi:focus-visible { outline: none; } /* already ha
     /* Skip overlays that manage their own scroll-lock via body classes —
        the heavy position:fixed body lock disturbs iOS Safari's visual viewport
        and leaves the bottom-nav misaligned after close. */
-    if(id==='stg-overlay' || id==='co-modal-ov' || id==='tou-ov' || id==='disc-ov' || id==='pp-ov' || id==='tour-ov') return false;
+    if(id==='stg-overlay' || id==='co-modal-ov' || id==='tou-ov' || id==='disc-ov' || id==='pp-ov' || id==='tour-ov' || id==='export-sheet-ov' || id==='pdf-name-ov') return false;
     if(id && /(-ov|-overlay|-modal|-sheet|-lightbox|-lb)$/.test(id)) return true;
     if(id && (id==='photo-lightbox' || id==='svg-lb' || id==='wm-offset-modal' || id==='lbl-custom-modal' || id==='lbl-custom-edit-modal' || id==='dga-ov')) return true;
     var c = el.className;
@@ -3600,12 +3600,27 @@ input.fi:focus-visible, select.fi:focus-visible { outline: none; } /* already ha
 })();
 </script>
 <script>
-// iOS Safari fallback: disable double-tap page zoom while preserving pinch zoom
+// iOS Safari fallback: disable double-tap page zoom while preserving pinch zoom.
+// Critical: only preventDefault on non-interactive targets. Calling
+// preventDefault() on a touchend inside a button/input/link cancels the
+// synthetic click event that iOS dispatches ~300ms later, which caused
+// app-wide "buttons need two taps to register" when the user tapped two
+// nearby buttons in rapid succession.
 (function(){
   if(!('ontouchstart' in window) && !(navigator.maxTouchPoints > 0)) return;
   var lastTouchTime = 0;
   var lastX = 0;
   var lastY = 0;
+  function isInteractive(el){
+    while(el && el!==document){
+      if(!el.tagName) { el = el.parentNode; continue; }
+      var tag = el.tagName;
+      if(tag==='BUTTON'||tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'||tag==='A'||tag==='LABEL'||tag==='SUMMARY')return true;
+      if(el.hasAttribute && (el.hasAttribute('onclick')||el.hasAttribute('role')||el.getAttribute&&el.getAttribute('tabindex')!==null))return true;
+      el = el.parentNode;
+    }
+    return false;
+  }
   document.addEventListener('touchend', function(e){
     if(e.changedTouches.length !== 1) return;
     var touch = e.changedTouches[0];
@@ -3616,7 +3631,7 @@ input.fi:focus-visible, select.fi:focus-visible { outline: none; } /* already ha
     lastTouchTime = now;
     lastX = touch.clientX;
     lastY = touch.clientY;
-    if(dt > 0 && dt < 320 && dx < 24 && dy < 24){
+    if(dt > 0 && dt < 320 && dx < 24 && dy < 24 && !isInteractive(e.target)){
       e.preventDefault();
     }
   }, {passive:false});
@@ -20995,7 +21010,10 @@ function openCoModal(){
   else{prev.src='';if(wrap)wrap.style.display='none';}
   coRefreshPreview();
   document.body.classList.add('co-open');
-  document.getElementById('co-modal-ov').classList.add('open');
+  var ov=document.getElementById('co-modal-ov');
+  ov.classList.add('open');
+  var inner=ov.querySelector('.co-modal');
+  if(inner)inner.scrollTop=0;
 }
 function closeCoModal(){document.getElementById('co-modal-ov').classList.remove('open');document.body.classList.remove('co-open');}
 /* Updates the toggle status pill from current field values. No preview card —
@@ -21464,8 +21482,6 @@ function openEditProjModal(){
   document.getElementById('proj-modal-ov').classList.add('open');
 }
 function closeProjModal(){document.getElementById('proj-modal-ov').classList.remove('open');}
-function closeNewProjModal(){closeProjModal();}
-function closeEditProjModal(){closeProjModal();}
 function confirmProjModal(){
   var name=document.getElementById('pm-name').value.trim();
   if(!name){document.getElementById('pm-name').focus();return;}
@@ -21494,8 +21510,6 @@ function confirmProjModal(){
     openProject(id);
   }
 }
-function saveEditProj(){confirmProjModal();}
-function confirmNewProj(){confirmProjModal();}
 // ──────────────────────────────────────────────
 var _BADGE_PALETTE=[
   [59,130,246],[239,68,68],[234,88,12],[22,163,74],[139,92,246],
@@ -23915,6 +23929,11 @@ function jcExportAllNotes(){
 
 var _exportData=null;
 var _exportCallbacks={};
+// iOS user-gesture preservation for Share: pre-render the PDF when the export
+// sheet opens so the Share tap can call navigator.share() synchronously inside
+// its own gesture tick. Without this, the 500ms+ html2canvas render runs
+// *after* the tap and iOS rejects the stale gesture.
+var _exportPdfCache=null; // { data:_exportData, status:'pending'|'ready'|'failed', blob, fname, title }
 /* Unified CSV builder — produces Excel-safe output:
    • UTF-8 BOM so Excel reads Unicode glyphs (°, ⅞, µ, Ω) correctly
    • Every cell quoted; inner quotes doubled
@@ -24027,9 +24046,29 @@ function buildPrintHTML(reportTitle,subtitle,bodyHTML,compact){
 function openExportSheet(title,text,csv,html,callbacks){
   _exportData={title:title,text:text,csv:csv||text,html:html||null};
   _exportCallbacks=callbacks||{};
+  _exportPdfCache=null;
   document.getElementById('export-sheet-title').textContent=title;
   document.getElementById('export-sheet-sub').textContent='Send or save this report';
   document.getElementById('export-sheet-ov').classList.add('open');
+  // Only pre-render when the generic Share path will actually be used.
+  // Custom share/pdf callbacks own their own render pipelines.
+  var useGenericShare=!(_exportCallbacks.share||_exportCallbacks.pdf);
+  if(useGenericShare && html && navigator.share && typeof html2canvas==='function' && window.jspdf && window.jspdf.jsPDF){
+    var dataRef=_exportData;
+    _exportPdfCache={data:dataRef,status:'pending'};
+    try{
+      _generatePdfBlob(function(pdfBlob,pdfName,pdfTitle){
+        if(_exportPdfCache && _exportPdfCache.data===dataRef){
+          _exportPdfCache.status='ready';
+          _exportPdfCache.blob=pdfBlob;
+          _exportPdfCache.fname=pdfName;
+          _exportPdfCache.title=pdfTitle;
+        }
+      },{silent:true});
+    }catch(_){
+      if(_exportPdfCache && _exportPdfCache.data===dataRef) _exportPdfCache.status='failed';
+    }
+  }
 }
 /* ── Native share / file save helper ──
    Wrapped iOS / Android webviews (iOS 15+, Chrome WebView 89+) support
@@ -24099,7 +24138,10 @@ function _openPdfBlob(blob,filename){
 function _shareOrPrint(html,title,autoPrint){
   // Native PDF share preferred on mobile/wrapped builds — avoids popup & html-download
   // quirks on iOS Safari / Capacitor / Android WebView. Needs html2canvas + jsPDF.
-  if(_canShareFiles()&&typeof html2canvas==='function'&&window.jspdf&&window.jspdf.jsPDF){
+  // Gate on navigator.share presence only; iOS canShare({files}) false-negatives
+  // on PDFs would otherwise bypass the native sheet. _nativeShareFile handles its
+  // own canShare check + download fallback.
+  if(navigator.share&&typeof html2canvas==='function'&&window.jspdf&&window.jspdf.jsPDF){
     _htmlToPdfBlob(html,title||'Circuitmatic Report',function(pdfBlob,fname,t){
       _nativeShareFile(pdfBlob,fname,'application/pdf',t);
     });
@@ -24134,7 +24176,7 @@ function doNativeShare(){
   closeExportSheet();
   navigator.share({title:_exportData.title,text:_exportData.text}).catch(function(){});
 }
-function closeExportSheet(){document.getElementById('export-sheet-ov').classList.remove('open');}
+function closeExportSheet(){document.getElementById('export-sheet-ov').classList.remove('open');_exportPdfCache=null;}
 function _autoFilename(tabName){
   var d=new Date();
   var stamp=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -24385,12 +24427,19 @@ function _textToPdfBlob(text,title){
 
 function doExportPDF(fname){
   if(!_exportData)return;
+  // Grab warm cache before closeExportSheet clears it.
+  var cached=(_exportPdfCache && _exportPdfCache.data===_exportData && _exportPdfCache.status==='ready') ? _exportPdfCache : null;
   closeExportSheet();
   if(_exportCallbacks.pdf){_exportCallbacks.pdf(fname||_autoFilename((_exportData&&_exportData.title)||'Report'));return;}
   var title=fname||_autoFilename((_exportData&&_exportData.title)||'Report');
   // Mobile / wrapped webviews: render a real PDF and hand to the native share
   // sheet so it lands in Files / Mail / Drive instead of a flaky popup window.
-  if(_canShareFiles()&&typeof html2canvas==='function'&&window.jspdf&&window.jspdf.jsPDF){
+  // Gate on navigator.share only — _nativeShareFile handles its own fallback.
+  if(navigator.share&&typeof html2canvas==='function'&&window.jspdf&&window.jspdf.jsPDF){
+    if(cached){
+      _nativeShareFile(cached.blob,cached.fname,'application/pdf',cached.title);
+      return;
+    }
     _generatePdfBlob(function(pdfBlob,pdfName,pdfTitle){
       _nativeShareFile(pdfBlob,pdfName,'application/pdf',pdfTitle);
     });
@@ -24416,7 +24465,7 @@ function doExportPDF(fname){
   }
 }
 // ── Generate PDF blob from the existing HTML template, then call back ──
-function _generatePdfBlob(callback){
+function _generatePdfBlob(callback,opts){
   if(!_exportData)return;
   var title=(_exportData&&_exportData.title)||'Circuitmatic Report';
   var content=_exportData.html||(
@@ -24424,13 +24473,16 @@ function _generatePdfBlob(callback){
     _exportData.text.replace(/&/g,'&amp;').replace(/</g,'&lt;')+
     '</body></html>'
   );
-  _htmlToPdfBlob(content,title,callback);
+  _htmlToPdfBlob(content,title,callback,opts);
 }
 // ── Render any styled-HTML string through html2canvas + jsPDF to a PDF blob.
 //    Used by both _generatePdfBlob (export sheet) and _shareOrPrint (per-tab share).
-function _htmlToPdfBlob(content,title,callback){
+//    opts.silent=true suppresses the loading spinner + failure alert (used for
+//    background pre-renders so a warm-up error doesn't disturb the user).
+function _htmlToPdfBlob(content,title,callback,opts){
+  var silent=!!(opts&&opts.silent);
   var fname=_autoFilename(title||'Report')+'.pdf';
-  showExportLoading('Generating PDF…');
+  if(!silent)showExportLoading('Generating PDF…');
   var container=document.createElement('div');
   container.className='pdf-print-wrapper';
   container.style.cssText='position:fixed;left:-9999px;top:0;width:680px;background:#fff;color:#111;padding:0;z-index:-1;';
@@ -24478,7 +24530,7 @@ function _htmlToPdfBlob(content,title,callback){
   document.body.appendChild(container);
   setTimeout(function(){
     if(typeof html2canvas!=='function'){
-      document.body.removeChild(container);hideExportLoading();_alert('PDF renderer not loaded. Reload the app and try again.');return;
+      document.body.removeChild(container);if(!silent)hideExportLoading();if(!silent)_alert('PDF renderer not loaded. Reload the app and try again.');return;
     }
     // Collect Y ranges of keep-together elements (CSS px, relative to container top)
     var keepRanges=[];
@@ -24490,7 +24542,7 @@ function _htmlToPdfBlob(content,title,callback){
     html2canvas(container,{scale:2,useCORS:true,backgroundColor:'#ffffff',logging:false}).then(function(canvas){
       document.body.removeChild(container);
       var jsPDF=window.jspdf&&window.jspdf.jsPDF;
-      if(!jsPDF){hideExportLoading();_alert('PDF library not loaded. Reload the app and try again.');return;}
+      if(!jsPDF){if(!silent)hideExportLoading();if(!silent)_alert('PDF library not loaded. Reload the app and try again.');return;}
       var imgW=canvas.width,imgH=canvas.height;
       var pageW=612,pageH=792,margin=28;
       var contentW=pageW-2*margin,scaleFactor=contentW/imgW,scaledH=imgH*scaleFactor;
@@ -24539,13 +24591,13 @@ function _htmlToPdfBlob(content,title,callback){
         }
       }
       var pdfBlob=doc.output('blob');
-      hideExportLoading();
+      if(!silent)hideExportLoading();
       callback(pdfBlob,fname,title);
     }).catch(function(err){
       try{document.body.removeChild(container);}catch(e){}
-      hideExportLoading();
+      if(!silent)hideExportLoading();
       try{ console.error('PDF export failed', err); }catch(_){}
-      _alert('Couldn\u2019t generate the PDF. Please try again.');
+      if(!silent)_alert('Couldn\u2019t generate the PDF. Please try again.');
     });
   },200);
 }
@@ -24555,6 +24607,15 @@ function doShareText(){
   if(!_exportData)return;
   if(_exportCallbacks.share){closeExportSheet();_exportCallbacks.share();return;}
   if(_exportCallbacks.pdf){closeExportSheet();_exportCallbacks.pdf();return;}
+  // iOS user-gesture path: if the pre-render from openExportSheet is ready,
+  // hand the cached blob straight to navigator.share inside this click tick.
+  // Grab the cache BEFORE closeExportSheet() clears it.
+  var cached=(_exportPdfCache && _exportPdfCache.data===_exportData && _exportPdfCache.status==='ready') ? _exportPdfCache : null;
+  if(cached){
+    closeExportSheet();
+    _nativeShareFile(cached.blob,cached.fname,'application/pdf',cached.title);
+    return;
+  }
   /* When a styled HTML template exists (buildPrintHTML output), render it to
      a proper PDF via html2canvas so the shared PDF matches Print PDF exactly.
      Only fall back to the plain-text _textToPdfBlob for text-only exports. */
@@ -31024,7 +31085,7 @@ function pcOpenExport(){
 }
 function pcGeneratePDF(fname){
   var html=pcBuildExportHtml();
-  if(_canShareFiles()&&typeof html2canvas==='function'&&window.jspdf&&window.jspdf.jsPDF){
+  if(navigator.share&&typeof html2canvas==='function'&&window.jspdf&&window.jspdf.jsPDF){
     _htmlToPdfBlob(html,fname||'Phase Color Chart',function(pdfBlob,pdfName,pdfTitle){
       _nativeShareFile(pdfBlob,pdfName,'application/pdf',pdfTitle);
     });
@@ -40127,16 +40188,6 @@ function lblShareNative(){
   _nativeShareFile(pdfBlob,fname,'application/pdf','Labels');
 }
 
-function lblShareOpen(){
-  if(!_lblSeq.length){_alert('No labels to export. Adjust settings first.');return;}
-  var text=_lblSeq.join('\n');
-  var csv=lblBuildCsvString();
-  openExportSheet('Labels',text,csv,null,{
-    share:function(){lblShareNative();},
-    pdf:function(){lblExportPDF();},
-    csv:function(){lblExportCSV();}
-  });
-}
 function lblReset(){
   document.getElementById('lbl-prefix').value='';
   document.getElementById('lbl-suffix').value='';
@@ -40368,7 +40419,8 @@ function lblFooterExport(){
   var txt=lines.join('\n');
   openExportSheet('Labels',txt,csv,null,{
     pdf:function(){lblExportPDF();},
-    csv:function(){lblExportCSV();}
+    csv:function(){lblExportCSV();},
+    share:function(){lblShareNative();}
   });
 }
 function lblSaveToNotes(){
@@ -52483,7 +52535,12 @@ function scanGeneratePDF(){
     _bnNav.classList.remove('dragging');
     _bnSyncIndicator(_bnIdx);
     var btn=_bnBtns[_bnIdx];
-    if(btn && btn.dataset && btn.dataset.nav) navTo(btn.dataset.nav);
+    // Suppress the synthetic click that fires after pointerup so the button's
+    // click handler doesn't call navTo a second time.
+    if(btn && btn.dataset && btn.dataset.nav){
+      _bnSuppress=true;
+      navTo(btn.dataset.nav);
+    }
     if(e&&typeof e.preventDefault==='function')e.preventDefault();
     setTimeout(function(){_bnSuppress=false;},0);
   }
