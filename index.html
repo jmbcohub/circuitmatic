@@ -8615,7 +8615,7 @@ body.light-mode .er-edit-btn.dir{color:var(--text);}
     var L=ltParseFt(document.getElementById('lt-len').value);
     var W=ltParseFt(document.getElementById('lt-wid').value);
     var mtHt=ltParseFt(document.getElementById('lt-ht').value);
-    if(L===null||W===null){resDiv.style.display='none';clearErr();return;}
+    if(L===null||W===null){showErr('Enter room dimensions.');return;}
     if(L<=0||W<=0){showErr('Room dimensions must be positive.');return;}
     if(L>300||W>300){showErr('Room dimensions cannot exceed 300\'. Check your input.');return;}
     if(mtHt===null||mtHt<=0){showErr('Mounting height must be positive.');return;}
@@ -10557,7 +10557,7 @@ body.light-mode .er-edit-btn.dir{color:var(--text);}
       }
     });
 
-    if(!anyConduits){resDiv.style.display='none';if(errDiv){errDiv.textContent='';errDiv.classList.remove('show');}return;}
+    if(!anyConduits){resDiv.style.display='none';if(errDiv){errDiv.textContent='Add at least one conduit to a tier.';errDiv.classList.add('show');}return;}
     if(!spanFt){resDiv.style.display='none';if(errDiv){errDiv.textContent='Enter a support span to calculate.';errDiv.classList.add('show');}return;}
 
     // Use max strut length across all tiers (rods must accommodate widest)
@@ -24050,10 +24050,10 @@ function openExportSheet(title,text,csv,html,callbacks){
   document.getElementById('export-sheet-title').textContent=title;
   document.getElementById('export-sheet-sub').textContent='Send or save this report';
   document.getElementById('export-sheet-ov').classList.add('open');
-  // Only pre-render when the generic Share path will actually be used.
-  // Custom share/pdf callbacks own their own render pipelines.
-  var useGenericShare=!(_exportCallbacks.share||_exportCallbacks.pdf);
-  if(useGenericShare && html && navigator.share && typeof html2canvas==='function' && window.jspdf && window.jspdf.jsPDF){
+  // Pre-render whenever we have HTML + the toolchain — regardless of callbacks.
+  // doShareText consumes this cache first so Share fires navigator.share()
+  // synchronously inside the tap's gesture tick (iOS requirement).
+  if(html && navigator.share && typeof html2canvas==='function' && window.jspdf && window.jspdf.jsPDF){
     var dataRef=_exportData;
     _exportPdfCache={data:dataRef,status:'pending'};
     try{
@@ -24084,20 +24084,24 @@ function _nativeShareFile(blob,filename,mimeType,shareTitle){
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(function(){URL.revokeObjectURL(url);},1500);
   }
+  function _onShareErr(err){
+    // AbortError = user tapped Cancel in the native sheet. Bail silently —
+    // do NOT force a download the user already declined.
+    if(err && err.name==='AbortError') return;
+    try{ console.warn('[share] navigator.share rejected:', err && err.name, err && err.message); }catch(_){}
+    _dl();
+  }
   if(navigator.share){
     try{
       var file=new File([blob],filename,{type:mimeType});
       var payload={files:[file],title:shareTitle||filename};
       // iOS Safari's canShare({files}) has known false-negatives for PDFs —
-      // attempt the share whenever navigator.share exists, and only fall
-      // through to download on actual throw or async rejection. This
-      // restores the native share sheet on iOS/Android where previously
-      // the canShare gate was silently bailing into a bare download.
-      if(!navigator.canShare || navigator.canShare(payload)){
-        return navigator.share(payload).catch(function(){ _dl(); });
-      }
-      return navigator.share(payload).catch(function(){ _dl(); });
-    }catch(_){ /* fall through to download */ }
+      // attempt the share whenever navigator.share exists, and rely on
+      // _onShareErr to distinguish user-cancel from real failure.
+      return navigator.share(payload).catch(_onShareErr);
+    }catch(err){
+      try{ console.warn('[share] threw synchronously:', err && err.name, err && err.message); }catch(_){}
+    }
   }
   _dl();
   return Promise.resolve();
@@ -24605,10 +24609,10 @@ function _htmlToPdfBlob(content,title,callback,opts){
 // ── Share: generate PDF via jsPDF, open native share sheet (iOS/Android) ──
 function doShareText(){
   if(!_exportData)return;
-  if(_exportCallbacks.share){closeExportSheet();_exportCallbacks.share();return;}
-  if(_exportCallbacks.pdf){closeExportSheet();_exportCallbacks.pdf();return;}
-  // iOS user-gesture path: if the pre-render from openExportSheet is ready,
-  // hand the cached blob straight to navigator.share inside this click tick.
+  // Priority 1: warm cache from openExportSheet. Firing navigator.share()
+  // synchronously in the tap tick is the ONLY reliable way on iOS Safari —
+  // any async work (setTimeout / html2canvas) between tap and share drops
+  // the transient user activation and iOS rejects with NotAllowedError.
   // Grab the cache BEFORE closeExportSheet() clears it.
   var cached=(_exportPdfCache && _exportPdfCache.data===_exportData && _exportPdfCache.status==='ready') ? _exportPdfCache : null;
   if(cached){
@@ -24616,9 +24620,14 @@ function doShareText(){
     _nativeShareFile(cached.blob,cached.fname,'application/pdf',cached.title);
     return;
   }
-  /* When a styled HTML template exists (buildPrintHTML output), render it to
-     a proper PDF via html2canvas so the shared PDF matches Print PDF exactly.
-     Only fall back to the plain-text _textToPdfBlob for text-only exports. */
+  // Priority 2: tab-specific share pipeline (Labels' jsPDF Avery sheet,
+  // Panel Schedule's validate-blanks flow). These build a different PDF
+  // than the generic html2canvas render so they can't use the cache.
+  if(_exportCallbacks.share){closeExportSheet();_exportCallbacks.share();return;}
+  // Priority 3: styled HTML template present but cache wasn't ready (user
+  // tapped Share before pre-render finished). Fall back to async render —
+  // this loses the iOS gesture, so _nativeShareFile will surface the error
+  // via _onShareErr and fall through to download.
   if(_exportData.html){
     closeExportSheet();
     _generatePdfBlob(function(pdfBlob,fname,title){
@@ -24626,14 +24635,12 @@ function doShareText(){
     });
     return;
   }
+  // Priority 4: text-only export (no HTML, no share callback).
   var title=_exportData.title||'Circuitmatic Report';
   var fname=_autoFilename(title)+'.pdf';
   var blob=_textToPdfBlob(_exportData.text,title);
   if(!blob){closeExportSheet();_alert('PDF generation unavailable.');return;}
   closeExportSheet();
-  // _nativeShareFile uses canShare({files}) guard + download fallback, so
-  // devices with text/url-only share (older iOS, some Android webviews) still
-  // get the PDF saved locally instead of silently failing.
   _nativeShareFile(blob,fname,'application/pdf',title);
 }
 function doExportSMS(){
@@ -33007,27 +33014,59 @@ function pnSaveToNotes(){
   _jcPending.rawInputs=pnCaptureRawInputs();
   jcShowSave();
 }
-function pnScrollTop(btn){var p=document.getElementById('tab-pn');if(btn&&btn.blur)try{btn.blur();}catch(_){}requestAnimationFrame(function(){try{window.scrollTo(0,0);}catch(_){}try{document.documentElement.scrollTop=0;}catch(_){}try{document.body.scrollTop=0;}catch(_){}if(p){try{p.scrollTo({top:0,behavior:'auto'});}catch(_){p.scrollTop=0;}}});}
-function lblScrollTop(btn){var p=document.getElementById('tab-labels');if(btn&&btn.blur)try{btn.blur();}catch(_){}requestAnimationFrame(function(){try{window.scrollTo(0,0);}catch(_){}try{document.documentElement.scrollTop=0;}catch(_){}try{document.body.scrollTop=0;}catch(_){}if(p){try{p.scrollTo({top:0,behavior:'auto'});}catch(_){p.scrollTop=0;}}});}
+function pnScrollTop(btn){
+  if(btn&&btn.blur)try{btn.blur();}catch(_){}
+  var p=document.getElementById('tab-pn');
+  if(p){
+    var prev=p.style.webkitOverflowScrolling;
+    p.style.webkitOverflowScrolling='auto';
+    try{p.scrollTo({top:0,behavior:'auto'});}catch(_){p.scrollTop=0;}
+    requestAnimationFrame(function(){p.style.webkitOverflowScrolling=prev||'';});
+  }
+  try{window.scrollTo(0,0);}catch(_){}
+  try{document.documentElement.scrollTop=0;}catch(_){}
+  try{document.body.scrollTop=0;}catch(_){}
+}
+function lblScrollTop(btn){
+  if(btn&&btn.blur)try{btn.blur();}catch(_){}
+  var p=document.getElementById('tab-labels');
+  if(p){
+    var prev=p.style.webkitOverflowScrolling;
+    p.style.webkitOverflowScrolling='auto';
+    try{p.scrollTo({top:0,behavior:'auto'});}catch(_){p.scrollTop=0;}
+    requestAnimationFrame(function(){p.style.webkitOverflowScrolling=prev||'';});
+  }
+  try{window.scrollTo(0,0);}catch(_){}
+  try{document.documentElement.scrollTop=0;}catch(_){}
+  try{document.body.scrollTop=0;}catch(_){}
+}
 function wcScrollTop(btn){
   if(btn&&btn.blur)try{btn.blur();}catch(_){}
-  requestAnimationFrame(function(){
-    try{window.scrollTo(0,0);}catch(_){}
-    try{document.documentElement.scrollTop=0;}catch(_){}
-    try{document.body.scrollTop=0;}catch(_){}
-    var p=document.getElementById('tab-wc');
-    if(p){try{p.scrollTop=0;}catch(_){} try{p.scrollTo(0,0);}catch(_){}}
-  });
+  var p=document.getElementById('tab-wc');
+  // Kill iOS momentum scroll — otherwise a lingering flick-inertia animation
+  // silently swallows the first scrollTop=0 and the tap feels like a no-op.
+  if(p){
+    var prev=p.style.webkitOverflowScrolling;
+    p.style.webkitOverflowScrolling='auto';
+    try{p.scrollTo({top:0,behavior:'auto'});}catch(_){p.scrollTop=0;}
+    requestAnimationFrame(function(){p.style.webkitOverflowScrolling=prev||'';});
+  }
+  try{window.scrollTo(0,0);}catch(_){}
+  try{document.documentElement.scrollTop=0;}catch(_){}
+  try{document.body.scrollTop=0;}catch(_){}
 }
 function chtScrollTop(btn){
   if(btn&&btn.blur)try{btn.blur();}catch(_){}
-  requestAnimationFrame(function(){
-    try{window.scrollTo(0,0);}catch(_){}
-    try{document.documentElement.scrollTop=0;}catch(_){}
-    try{document.body.scrollTop=0;}catch(_){}
-    var p=document.getElementById('tab-charts');
-    if(p){try{p.scrollTop=0;}catch(_){} try{p.scrollTo(0,0);}catch(_){}}
-  });
+  var p=document.getElementById('tab-charts');
+  if(p){
+    var prev=p.style.webkitOverflowScrolling;
+    p.style.webkitOverflowScrolling='auto';
+    try{p.scrollTo({top:0,behavior:'auto'});}catch(_){p.scrollTop=0;}
+    requestAnimationFrame(function(){p.style.webkitOverflowScrolling=prev||'';});
+  }
+  try{window.scrollTo(0,0);}catch(_){}
+  try{document.documentElement.scrollTop=0;}catch(_){}
+  try{document.body.scrollTop=0;}catch(_){}
 }
 window.chtScrollTop=chtScrollTop;
 window.wcScrollTop=wcScrollTop;
@@ -43764,7 +43803,7 @@ function scanGeneratePDF(){
     var errEl = document.getElementById('precut-err');
     var resEl = document.getElementById('precut-result');
 
-    if(stockLen<=0){ resEl.style.display='none'; errEl.textContent=''; return; }
+    if(stockLen<=0){ resEl.style.display='none'; errEl.textContent='Enter a stock length.'; return; }
 
     // Gather valid cuts with feet-inch parsing + overlength check
     var cuts = [];
@@ -43786,7 +43825,7 @@ function scanGeneratePDF(){
     if(hasError){ resEl.style.display='none'; return; }
     errEl.textContent = '';
 
-    if(cuts.length===0){ resEl.style.display='none'; return; }
+    if(cuts.length===0){ resEl.style.display='none'; errEl.textContent='Add at least one cut.'; return; }
 
     var bins = binPack(cuts, stockLen, kerf);
     var totalStock = bins.length;
